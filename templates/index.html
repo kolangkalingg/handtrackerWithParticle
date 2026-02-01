@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Hand Gesture Particles</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #000; 
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }
+        canvas { display: block; }
+        #ui-layer {
+            position: absolute; 
+            top: 20px; 
+            left: 20px;
+            color: #87CEFA; 
+            font-size: 20px; 
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            z-index: 10;
+            pointer-events: none;
+        }
+        .highlight { color: #fff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="ui-layer">
+        SISTEM PARTIKEL 3D AKTIF<br>
+        GESTURE: <span id="gst-val" class="highlight">NONE</span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <script>
+const socket = io();
+        const gstDisplay = document.getElementById("gst-val");
+
+        let scene, camera, renderer, particles, geometry;
+        const PARTICLE_COUNT = 7000;
+        let targetArray = new Float32Array(PARTICLE_COUNT * 3);
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 1); // Memastikan background hitam pekat
+            document.body.appendChild(renderer.domElement);
+
+            geometry = new THREE.BufferGeometry();
+            const posArray = new Float32Array(PARTICLE_COUNT * 3);
+
+            // Inisialisasi posisi awal (Starfield) agar tidak kosong saat start
+            for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 10;
+                targetArray[i] = posArray[i];
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: 0x87CEFA,
+                size: 0.05, // Ukuran diperbesar sedikit agar lebih terlihat
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                opacity: 1.0
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+
+            console.log("Three.js Initialized");
+        }
+
+        socket.on("gesture", (data) => {
+            const gesture = data.value;
+            gstDisplay.innerText = gesture;
+            console.log("Gesture received in Web:", gesture); // Debugging di Console (F12)
+            updateShape(gesture);
+        });
+
+        function updateShape(gst) {
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3;
+                let x, y, z;
+
+                if (gst === "OPEN_PALM") {
+                    if (i < 3000) {
+                        const phi = Math.acos(-1 + (2 * i) / 3000);
+                        const theta = Math.sqrt(3000 * Math.PI) * phi;
+                        x = 0.8 * Math.cos(theta) * Math.sin(phi);
+                        y = 0.8 * Math.sin(theta) * Math.sin(phi);
+                        z = 0.8 * Math.cos(phi);
+                    } else {
+                        x = (Math.random() - 0.5) * 8;
+                        y = (Math.random() - 0.5) * 8;
+                        z = (Math.random() - 0.5) * 8;
+                    }
+                } 
+                else if (gst === "FIST") {
+                    if (i < 4000) { // Bola Saturnus
+                        const r = 1.0;
+                        const phi = Math.random() * Math.PI * 2;
+                        const costheta = Math.random() * 2 - 1;
+                        const theta = Math.acos(costheta);
+                        x = r * Math.sin(theta) * Math.cos(phi);
+                        y = r * Math.sin(theta) * Math.sin(phi);
+                        z = r * Math.cos(theta);
+                    } else { // Cincin
+                        const angle = Math.random() * Math.PI * 2;
+                        const r = 2.0 + Math.random() * 0.5;
+                        x = Math.cos(angle) * r;
+                        y = Math.sin(angle) * 0.4;
+                        z = Math.sin(angle) * r;
+                    }
+                }
+                else if (gst === "LOVE") {
+                    const t = Math.random() * Math.PI * 2;
+                    x = 0.2 * (16 * Math.pow(Math.sin(t), 3));
+                    y = 0.2 * (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+                    z = (Math.random() - 0.5) * 0.5;
+                }
+                else if (gst === "PEACE") {
+                    x = ((i / PARTICLE_COUNT) - 0.5) * 8;
+                    y = Math.sin(i * 0.1) * 1.5;
+                    z = Math.cos(i * 0.1) * 0.5;
+                }
+                else {
+                    x = (Math.random() - 0.5) * 15;
+                    y = (Math.random() - 0.5) * 15;
+                    z = (Math.random() - 0.5) * 15;
+                }
+
+                targetArray[i3] = x;
+                targetArray[i3 + 1] = y;
+                targetArray[i3 + 2] = z;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const positions = geometry.attributes.position.array;
+            for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+                positions[i] += (targetArray[i] - positions[i]) * 0.1;
+            }
+            geometry.attributes.position.needsUpdate = true;
+
+            particles.rotation.y += 0.005; // Rotasi terus menerus
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
