@@ -2,169 +2,507 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Hand Gesture Particles</title>
+    <title>SIBI Space Adventure</title>
     <style>
         body { 
-            margin: 0; 
-            overflow: hidden; 
-            background-color: #000; 
-            font-family: 'Segoe UI', Tahoma, sans-serif;
+            margin: 0; overflow: hidden; 
+            background-color: #000;
+            font-family: 'Segoe UI', sans-serif; 
         }
-        canvas { display: block; }
-        #ui-layer {
-            position: absolute; 
-            top: 20px; 
-            left: 20px;
-            color: #87CEFA; 
-            font-size: 20px; 
-            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+
+        /* BACKGROUND & KAMERA */
+        #bg-video {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: -2; opacity: 0.3; 
+        }
+        #space-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, rgba(20, 20, 60, 0.4) 0%, rgba(0, 0, 0, 0.95) 100%);
+            z-index: -1; pointer-events: none;
+        }
+
+        /* UI LAYER */
+        #game-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 20px; box-sizing: border-box;
             z-index: 10;
-            pointer-events: none;
         }
-        .highlight { color: #fff; font-weight: bold; }
+
+        #top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
+        .status-panel {
+            background: rgba(0, 20, 40, 0.7); 
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            padding: 15px 25px; border-radius: 12px;
+            color: white; backdrop-filter: blur(8px);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.1);
+        }
+
+        #timer-box {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.2); border: 2px solid #ff4444;
+            padding: 10px 30px; border-radius: 50px;
+            font-size: 2rem; font-weight: bold; color: #ffcccc;
+            text-shadow: 0 0 10px #ff0000;
+            display: none; 
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; color: #00d2ff; letter-spacing: 2px; text-transform: uppercase; }
+        .big-text { font-size: 3rem; font-weight: bold; margin: 10px 0; text-shadow: 0 0 15px rgba(0,210,255,0.8); }
+        .hint { font-size: 0.9rem; color: #aaa; margin-top: 5px; }
+
+        #word-container { text-align: right; }
+        .letter-slot {
+            display: inline-block; width: 50px; height: 60px;
+            background: rgba(255,255,255,0.1); margin: 2px;
+            line-height: 60px; text-align: center; font-size: 32px;
+            border-radius: 8px; font-weight: bold; color: #555;
+            transition: all 0.3s ease;
+        }
+        .letter-correct { background: #00ff88; color: #000; box-shadow: 0 0 15px #00ff88; transform: scale(1.1); }
+        .letter-active { border: 2px solid #00d2ff; color: white; background: rgba(0, 210, 255, 0.1); }
+
+        #guide-box {
+            position: absolute; bottom: 30px; right: 30px; text-align: right; max-width: 400px;
+        }
+        #guide-title {
+            color: #ffd700; font-weight: bold; font-size: 12px; letter-spacing: 1px;
+            text-transform: uppercase; margin-bottom: 5px;
+        }
+        #guide-instruction {
+            color: #fff; font-size: 20px; font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0,0,0,1);
+            line-height: 1.4;
+            background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.8));
+            padding: 15px 20px; border-radius: 8px;
+            border-right: 4px solid #ffd700;
+        }
+
+        #start-screen {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center; color: white;
+            text-shadow: 0 0 20px rgba(0, 210, 255, 0.8);
+            z-index: 20;
+        }
+        .blink { animation: blinker 1.5s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.5; } }
+
     </style>
 </head>
 <body>
-    <div id="ui-layer">
-        SISTEM PARTIKEL 3D AKTIF<br>
-        GESTURE: <span id="gst-val" class="highlight">NONE</span>
+
+    <img id="bg-video" src="" alt="Camera Feed">
+    <div id="space-overlay"></div>
+
+    <div id="game-layer">
+        <div id="timer-box">01:30</div>
+
+        <div id="top-bar">
+            <div class="status-panel">
+                <h1>DETECTED</h1>
+                <div id="debug-gesture" class="big-text">-</div>
+                <div class="hint">Kamera Aktif</div>
+            </div>
+
+            <div class="status-panel" id="word-container">
+                <h1>MINI GAME: SUSUN KATA</h1>
+                <div id="word-display" style="margin-top: 10px;"></div>
+                <div id="game-msg" style="color: #00ff88; font-weight: bold; height: 20px; margin-top:5px;"></div>
+            </div>
+        </div>
+
+        <div id="start-screen">
+            <h1 style="font-size: 2.5rem; margin-bottom: 10px;" id="main-title">SIBI SPACE ADVENTURE</h1>
+            <h2 class="blink" style="color: #ffd700;" id="sub-title">METAL (🤘) UNTUK MULAI</h2>
+        </div>
+        
+        <div class="status-panel" style="align-self: flex-start; margin-top: auto;">
+            <div class="hint">
+                <b>Status Partikel:</b> <span id="particle-status">Menunggu...</span>
+            </div>
+        </div>
+
+        <div id="guide-box">
+            <div id="guide-title">PETUNJUK GESTURE:</div>
+            <div id="guide-instruction">Menunggu permainan dimulai...</div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <script>
-const socket = io();
-        const gstDisplay = document.getElementById("gst-val");
+        const socket = io();
+        
+        const sibiDescriptions = {
+            'A': 'Kepalkan tangan, jempol tegak lurus ke atas.',
+            'B': '4 jari tegak rapat, jempol ditekuk ke dalam telapak.',
+            'C': 'Bentuk huruf C dengan jari-jari melengkung.',
+            'D': 'Telunjuk tegak lurus, jari lain menyatu dengan jempol.',
+            'E': 'Semua jari ditekuk penuh menempel ke telapak (Kepalan).',
+            'F': 'Telunjuk & tengah rapat/silang, jari lain ditekuk.',
+            'G': 'Kepalan tangan, telunjuk menunjuk ke SAMPING.',
+            'H': 'Telunjuk & tengah menunjuk ke SAMPING.',
+            'I': 'Hanya jari kelingking yang tegak.',
+            'J': 'Kelingking tegak, lalu gerakkan melengkung.',
+            'K': 'Jempol diselipkan di antara telunjuk & tengah yang tegak.',
+            'L': 'Telunjuk & jempol membentuk huruf L.',
+            'M': 'Jempol diselipkan di antara jari manis & kelingking.',
+            'N': 'Jempol diselipkan di antara jari tengah & manis.',
+            'O': 'Ujung jari bertemu jempol membentuk lingkaran.',
+            'P': 'Telunjuk & tengah lurus menunjuk ke BAWAH.',
+            'Q': 'Telunjuk lurus menunjuk ke BAWAH.',
+            'R': 'Telunjuk & tengah disilangkan.',
+            'S': 'Kepalkan tangan, jempol menindih jari telunjuk.',
+            'T': 'Jempol diselipkan di antara telunjuk & tengah.',
+            'U': 'Telunjuk & tengah tegak RAPAT.',
+            'V': 'Telunjuk & tengah tegak MEMBUKA (Peace).',
+            'W': '3 jari tengah tegak (Telunjuk, Tengah, Manis).',
+            'X': 'Telunjuk dikaitkan seperti menarik pelatuk.',
+            'Y': 'Jempol & kelingking dibentangkan (Seperti telepon).',
+            'Z': 'Telunjuk menggambar huruf Z di udara.',
+            'METAL': 'Siap Bermain!'
+        };
 
-        let scene, camera, renderer, particles, geometry;
-        const PARTICLE_COUNT = 7000;
-        let targetArray = new Float32Array(PARTICLE_COUNT * 3);
+        const words = ["EHBAHLS", "WITSWTS", "MAKANGS", "LAHWKWS", "PLENGBS", "HADEHCS", "ELITISS", "MABARRS", "BIGMOIS", "NANTIAS"];
+        let targetWord = "";
+        let charIndex = 6;
+        let isWin = false;
+        let gameStarted = false;
+        let wordsCompleted = 0; // Hitung kata yang selesai
+        const WIN_TARGET = 2;   // Target 2 kata untuk menang
+        
+        let gameTimer;
+        let timeLeft = 90;
 
-        init();
-        animate();
-
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 5;
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x000000, 1); // Memastikan background hitam pekat
-            document.body.appendChild(renderer.domElement);
-
-            geometry = new THREE.BufferGeometry();
-            const posArray = new Float32Array(PARTICLE_COUNT * 3);
-
-            // Inisialisasi posisi awal (Starfield) agar tidak kosong saat start
-            for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
-                posArray[i] = (Math.random() - 0.5) * 10;
-                targetArray[i] = posArray[i];
-            }
+        function initGame() {
+            targetWord = words[Math.floor(Math.random() * words.length)];
+            charIndex = 0;
+            isWin = false;
+            document.getElementById("game-msg").innerText = "";
+            renderWord();
+            updateGuide(targetWord[charIndex]);
             
-            geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-
-            const material = new THREE.PointsMaterial({
-                color: 0x87CEFA,
-                size: 0.05, // Ukuran diperbesar sedikit agar lebih terlihat
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                opacity: 1.0
-            });
-
-            particles = new THREE.Points(geometry, material);
-            scene.add(particles);
-
-            console.log("Three.js Initialized");
+            // Timer hanya mulai reset jika ini kata pertama
+            if (wordsCompleted === 0) {
+                startTimer();
+            }
         }
 
-        socket.on("gesture", (data) => {
-            const gesture = data.value;
-            gstDisplay.innerText = gesture;
-            console.log("Gesture received in Web:", gesture); // Debugging di Console (F12)
-            updateShape(gesture);
+        function startTimer() {
+            timeLeft = 90;
+            const timerEl = document.getElementById("timer-box");
+            timerEl.style.display = "block";
+            updateTimerDisplay();
+
+            clearInterval(gameTimer);
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if(timeLeft <= 0) gameOver();
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const m = Math.floor(timeLeft / 60);
+            const s = timeLeft % 60;
+            document.getElementById("timer-box").innerText = 
+                `${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
+        }
+
+        function gameOver() {
+            resetGameUI("GAME OVER", "red", "WAKTU HABIS. COBA LAGI (METAL 🤘)");
+        }
+
+        function gameVictory() {
+            resetGameUI("ANDA MENANG!", "#00ff88", "HEBAT! MAIN LAGI? (METAL 🤘)");
+        }
+
+        function resetGameUI(title, color, sub) {
+            clearInterval(gameTimer);
+            gameStarted = false;
+            wordsCompleted = 0; // Reset progress
+            document.getElementById("timer-box").style.display = "none";
+            document.getElementById("start-screen").style.display = "block";
+            const mt = document.getElementById("main-title");
+            mt.innerText = title;
+            mt.style.color = color;
+            document.getElementById("sub-title").innerText = sub;
+            document.getElementById("guide-instruction").innerText = title;
+            updateParticleLogic("NO_HAND"); // Reset visual
+        }
+
+        function updateGuide(char) {
+            const el = document.getElementById("guide-instruction");
+            if(sibiDescriptions[char]) el.innerText = `Huruf ${char}: ${sibiDescriptions[char]}`;
+            else el.innerText = "Ikuti pola huruf.";
+        }
+
+        function renderWord() {
+            const container = document.getElementById("word-display");
+            container.innerHTML = "";
+            for(let i=0; i<targetWord.length; i++) {
+                const span = document.createElement("span");
+                span.className = "letter-slot";
+                span.innerText = targetWord[i];
+                if(i < charIndex) span.classList.add("letter-correct");
+                else if(i === charIndex) span.classList.add("letter-active");
+                container.appendChild(span);
+            }
+        }
+
+        function checkGame(gesture) {
+            if(!gameStarted || isWin) return;
+            
+            if(gesture === targetWord[charIndex]) {
+                charIndex++;
+                renderWord();
+                if(charIndex >= targetWord.length) {
+                    // KATA SELESAI
+                    isWin = true;
+                    wordsCompleted++;
+                    triggerWinEffect();
+
+                    if(wordsCompleted >= WIN_TARGET) {
+                        document.getElementById("game-msg").innerText = "SELESAI 2 KATA!";
+                        setTimeout(gameVictory, 2000);
+                    } else {
+                        document.getElementById("game-msg").innerText = "BAGUS! 1 KATA LAGI...";
+                        setTimeout(() => {
+                            isWin = false;
+                            targetWord = words[Math.floor(Math.random() * words.length)];
+                            charIndex = 0;
+                            document.getElementById("game-msg").innerText = "";
+                            renderWord();
+                            updateGuide(targetWord[charIndex]);
+                        }, 2000);
+                    }
+                } else {
+                    updateGuide(targetWord[charIndex]);
+                }
+            }
+        }
+
+        // --- THREE.JS SETUP ---
+        let scene, camera, renderer;
+        let mainParticles, bgParticles; 
+        let handPos = { x: 0, y: 0 };
+        let currentGesture = "NO_HAND";
+        const MAIN_COUNT = 4000; 
+        const BG_COUNT = 2000;   
+        let mainTarget = new Float32Array(MAIN_COUNT * 3);
+
+        initThree();
+        animate();
+
+        socket.on("update_data", (data) => {
+            if(data.image) document.getElementById("bg-video").src = "data:image/jpeg;base64," + data.image;
+
+            currentGesture = data.gesture;
+            document.getElementById("debug-gesture").innerText = currentGesture;
+
+            const targetX = (data.x - 0.5) * -30;
+            const targetY = (data.y - 0.5) * -20;
+            handPos.x += (targetX - handPos.x) * 0.1; 
+            handPos.y += (targetY - handPos.y) * 0.1;
+
+            if (!gameStarted) {
+                if (currentGesture === "METAL") {
+                    gameStarted = true;
+                    document.getElementById("start-screen").style.display = "none";
+                    document.getElementById("main-title").innerText = "SIBI SPACE ADVENTURE"; 
+                    document.getElementById("main-title").style.color = "#00d2ff";
+                    initGame();
+                }
+            } else {
+                checkGame(currentGesture);
+            }
+            updateParticleLogic(currentGesture);
         });
 
-        function updateShape(gst) {
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const i3 = i * 3;
-                let x, y, z;
+        function getLetterPoints(char) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const size = 100;
+            canvas.width = size; canvas.height = size;
+            ctx.font = 'bold 80px Arial';
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(char, size/2, size/2);
+            const data = ctx.getImageData(0,0,size,size).data;
+            const points = [];
+            for(let y=0; y<size; y+=2) {
+                for(let x=0; x<size; x+=2) {
+                    if(data[(y*size+x)*4+3] > 128) points.push({x: (x - size/2) * 0.3, y: -(y - size/2) * 0.3});
+                }
+            }
+            return points;
+        }
 
-                if (gst === "OPEN_PALM") {
-                    if (i < 3000) {
-                        const phi = Math.acos(-1 + (2 * i) / 3000);
-                        const theta = Math.sqrt(3000 * Math.PI) * phi;
-                        x = 0.8 * Math.cos(theta) * Math.sin(phi);
-                        y = 0.8 * Math.sin(theta) * Math.sin(phi);
-                        z = 0.8 * Math.cos(phi);
-                    } else {
-                        x = (Math.random() - 0.5) * 8;
-                        y = (Math.random() - 0.5) * 8;
-                        z = (Math.random() - 0.5) * 8;
-                    }
-                } 
-                else if (gst === "FIST") {
-                    if (i < 4000) { // Bola Saturnus
-                        const r = 1.0;
-                        const phi = Math.random() * Math.PI * 2;
-                        const costheta = Math.random() * 2 - 1;
-                        const theta = Math.acos(costheta);
-                        x = r * Math.sin(theta) * Math.cos(phi);
-                        y = r * Math.sin(theta) * Math.sin(phi);
-                        z = r * Math.cos(theta);
-                    } else { // Cincin
-                        const angle = Math.random() * Math.PI * 2;
-                        const r = 2.0 + Math.random() * 0.5;
-                        x = Math.cos(angle) * r;
-                        y = Math.sin(angle) * 0.4;
-                        z = Math.sin(angle) * r;
-                    }
+        function updateParticleLogic(gst) {
+            const statusEl = document.getElementById("particle-status");
+            let mode = "SCATTER";
+            let points = [];
+
+            // --- MODE AWAL (Belum Main) ---
+            if (!gameStarted) {
+                if(gst === "NO_HAND") {
+                    mode = "SCATTER";
+                    statusEl.innerText = "Luar Angkasa (Menunggu Tangan)";
+                    statusEl.style.color = "#aaa";
                 }
-                else if (gst === "LOVE") {
-                    const t = Math.random() * Math.PI * 2;
-                    x = 0.2 * (16 * Math.pow(Math.sin(t), 3));
-                    y = 0.2 * (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-                    z = (Math.random() - 0.5) * 0.5;
+                else if (gst === "V") {
+                    mode = "SUN"; // 2 Jari = Matahari
+                    statusEl.innerText = "Mode: MATAHARI (Peace)";
+                    statusEl.style.color = "#ffaa00";
                 }
-                else if (gst === "PEACE") {
-                    x = ((i / PARTICLE_COUNT) - 0.5) * 8;
-                    y = Math.sin(i * 0.1) * 1.5;
-                    z = Math.cos(i * 0.1) * 0.5;
+                else if (["A", "E", "S", "T", "M", "N"].includes(gst)) {
+                    mode = "SATURN"; // Kepalan = Saturnus
+                    statusEl.innerText = "Mode: SATURNUS (Kepal)";
+                    statusEl.style.color = "#d2aaff";
                 }
                 else {
-                    x = (Math.random() - 0.5) * 15;
-                    y = (Math.random() - 0.5) * 15;
-                    z = (Math.random() - 0.5) * 15;
+                    mode = "SPHERE"; // Default tangan lain
+                    statusEl.innerText = "Siap (Tunjukan Metal 🤘)";
+                    statusEl.style.color = "#ffd700";
                 }
-
-                targetArray[i3] = x;
-                targetArray[i3 + 1] = y;
-                targetArray[i3 + 2] = z;
             }
+            // --- MODE GAME ---
+            else {
+                if (gst === "NO_HAND") mode = "SCATTER";
+                else if(["NONE", "UNKNOWN", "METAL"].includes(gst)) mode = "SPHERE";
+                else {
+                    mode = "LETTER";
+                    points = getLetterPoints(gst);
+                    statusEl.innerText = "Membentuk: " + gst;
+                    statusEl.style.color = "#00ff88";
+                }
+            }
+
+            // Hitung Target Posisi Partikel
+            for(let i=0; i<MAIN_COUNT; i++) {
+                const i3 = i * 3;
+                
+                if(mode === "SCATTER") {
+                    mainTarget[i3] = (Math.random()-0.5) * 80;
+                    mainTarget[i3+1] = (Math.random()-0.5) * 60;
+                    mainTarget[i3+2] = (Math.random()-0.5) * 50;
+                }
+                else if(mode === "SPHERE") {
+                    const phi = Math.acos(-1 + (2 * i) / MAIN_COUNT);
+                    const theta = Math.sqrt(MAIN_COUNT * Math.PI) * phi;
+                    const r = 4.0; 
+                    mainTarget[i3] = handPos.x + r * Math.cos(theta) * Math.sin(phi);
+                    mainTarget[i3+1] = handPos.y + r * Math.sin(theta) * Math.sin(phi);
+                    mainTarget[i3+2] = r * Math.cos(phi);
+                }
+                else if(mode === "SATURN") {
+                    // 70% Bola, 30% Cincin
+                    if (i < MAIN_COUNT * 0.7) {
+                        const phi = Math.acos(-1 + (2 * i) / (MAIN_COUNT*0.7));
+                        const theta = Math.sqrt(MAIN_COUNT * Math.PI) * phi;
+                        const r = 3.0; 
+                        mainTarget[i3] = handPos.x + r * Math.cos(theta) * Math.sin(phi);
+                        mainTarget[i3+1] = handPos.y + r * Math.sin(theta) * Math.sin(phi);
+                        mainTarget[i3+2] = r * Math.cos(phi);
+                    } else {
+                        // Cincin
+                        const angle = Math.random() * Math.PI * 2;
+                        const rad = 4.5 + Math.random() * 2.5; // Radius 4.5 - 7.0
+                        mainTarget[i3] = handPos.x + rad * Math.cos(angle);
+                        mainTarget[i3+1] = handPos.y + (Math.random()-0.5)*0.5; // Tipis di Y
+                        mainTarget[i3+2] = rad * Math.sin(angle); // Z plane
+                    }
+                }
+                else if(mode === "SUN") {
+                    // Bola dengan noise keluar (Sinar)
+                    const phi = Math.acos(-1 + (2 * i) / MAIN_COUNT);
+                    const theta = Math.sqrt(MAIN_COUNT * Math.PI) * phi;
+                    const r = 3.5 + (Math.random() * 2.0); // Jitter radius
+                    mainTarget[i3] = handPos.x + r * Math.cos(theta) * Math.sin(phi);
+                    mainTarget[i3+1] = handPos.y + r * Math.sin(theta) * Math.sin(phi);
+                    mainTarget[i3+2] = r * Math.cos(phi);
+                }
+                else if(mode === "LETTER") {
+                    if(points.length > 0) {
+                        const p = points[i % points.length];
+                        mainTarget[i3] = p.x * 1.5; 
+                        mainTarget[i3+1] = p.y * 1.5;
+                        mainTarget[i3+2] = (Math.random()-0.5) * 2; 
+                    } else {
+                        mainTarget[i3] = 0; mainTarget[i3+1] = 0; mainTarget[i3+2] = 0;
+                    }
+                }
+            }
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050510, 0.02);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
+            renderer = new THREE.WebGLRenderer({antialias: true, alpha: true});
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const geoMain = new THREE.BufferGeometry();
+            const posMain = new Float32Array(MAIN_COUNT * 3);
+            geoMain.setAttribute('position', new THREE.BufferAttribute(posMain, 3));
+            const matMain = new THREE.PointsMaterial({
+                color: 0x00d2ff, size: 0.45, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending
+            });
+            mainParticles = new THREE.Points(geoMain, matMain);
+            scene.add(mainParticles);
+
+            const geoBg = new THREE.BufferGeometry();
+            const posBg = new Float32Array(BG_COUNT * 3);
+            for(let i=0; i<BG_COUNT*3; i++) posBg[i] = (Math.random()-0.5) * 180; 
+            geoBg.setAttribute('position', new THREE.BufferAttribute(posBg, 3));
+            const matBg = new THREE.PointsMaterial({color: 0xffffff, size: 0.2, transparent: true, opacity: 0.5});
+            bgParticles = new THREE.Points(geoBg, matBg);
+            scene.add(bgParticles);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth/window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function triggerWinEffect() {
+            mainParticles.material.color.setHex(0x00ff00);
+            setTimeout(() => { mainParticles.material.color.setHex(0x00d2ff); }, 1000);
         }
 
         function animate() {
             requestAnimationFrame(animate);
 
-            const positions = geometry.attributes.position.array;
-            for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
-                positions[i] += (targetArray[i] - positions[i]) * 0.1;
+            const pos = mainParticles.geometry.attributes.position.array;
+            let smooth = (currentGesture.length === 1 && gameStarted) ? 0.15 : 0.08;
+            for(let i=0; i<MAIN_COUNT * 3; i++) {
+                pos[i] += (mainTarget[i] - pos[i]) * smooth;
             }
-            geometry.attributes.position.needsUpdate = true;
-
-            particles.rotation.y += 0.005; // Rotasi terus menerus
+            mainParticles.geometry.attributes.position.needsUpdate = true;
             
+            // Rotasi Partikel Utama
+            if(gameStarted && currentGesture.length === 1) {
+                mainParticles.rotation.y += 0.01;
+            } else {
+                // Rotasi lambat di mode Saturnus/Matahari/Bola
+                mainParticles.rotation.y += 0.005; 
+                // Miringkan sedikit agar cincin Saturnus terlihat bagus
+                if(!gameStarted) mainParticles.rotation.x = 0.5; 
+                else mainParticles.rotation.x = 0;
+            }
+
+            // ROTASI BACKGROUND SANGAT PELAN (Deep Space)
+            bgParticles.rotation.y -= 0.00005; 
+            bgParticles.rotation.x += 0.00002;
+
             renderer.render(scene, camera);
         }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
